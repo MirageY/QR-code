@@ -8,7 +8,7 @@
   <!-- TailwindCSS CDN（仅用于样式，页面可直接部署为静态站点） -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- QR 生成库（轻量，Canvas 渲染） -->
-  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
   <!-- 打包下载（可选）：JSZip + FileSaver 让你一键打包全部 PNG -->
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
@@ -76,16 +76,6 @@
       <div id="status" class="text-sm text-gray-600"></div>
       <div id="grid" class="mt-4 grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"></div>
     </section>
-
-    <section id="howto" class="mt-12 prose max-w-none">
-      <h2>如何部署（让别人手机也能用）</h2>
-      <ol>
-        <li><strong>GitHub Pages（免费）</strong>：新建仓库，文件名 <code>index.html</code>，把本页面内容粘贴进去并提交；在仓库设置里启用 Pages，选择 <code>main</code> 分支，保存后获取公开链接并分享。</li>
-        <li><strong>Netlify / Vercel</strong>：新建站点，上传 <code>index.html</code> 或连接仓库，一键部署，得到公开 URL。</li>
-        <li><strong>任何静态托管</strong>：本工具纯前端，无需服务器；把 <code>index.html</code> 放到你可公开访问的任意静态空间即可。</li>
-      </ol>
-      <p class="text-sm text-gray-500">所有二维码在浏览器本地生成，不会上传你的链接；适合在公司或校园内部署私有页面。</p>
-    </section>
   </main>
 
   <footer class="max-w-6xl mx-auto px-4 py-8 text-xs text-gray-500">
@@ -111,13 +101,20 @@
     }
 
     async function makeQRCanvas(value, { size=384, margin=2, ecl='M' }={}){
-      return new Promise((resolve, reject) => {
-        const c = document.createElement('canvas');
-        QRCode.toCanvas(c, value, { width:size, margin, errorCorrectionLevel: ecl }, (err) => {
-          if (err) return reject(err);
-          resolve(c);
-        });
+      // Check if QRious library is available
+      if (typeof QRious === 'undefined') {
+        throw new Error('QRious library not loaded');
+      }
+      
+      const canvas = document.createElement('canvas');
+      const qr = new QRious({
+        element: canvas,
+        value: value,
+        size: size,
+        level: ecl
       });
+      
+      return canvas;
     }
 
     function canvasToBlob(canvas){
