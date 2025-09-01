@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>批量二维码生成器 · 支持手机端</title>
+  <meta name="description" content="把一批链接快速生成多个二维码，支持下载、打包、手机端访问" />
+  <!-- TailwindCSS CDN（仅用于样式，页面可直接部署为静态站点） -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- QR 生成库（轻量，Canvas 渲染） -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <!-- 打包下载（可选）：JSZip + FileSaver 让你一键打包全部 PNG -->
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+  <style>
+    .card { box-shadow: 0 10px 25px rgba(0,0,0,.08); }
+  </style>
+</head>
+<body class="min-h-screen bg-gray-50 text-gray-900">
+  <header class="sticky top-0 z-10 bg-white/80 backdrop-blur border-b">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+      <h1 class="text-xl md:text-2xl font-semibold">批量二维码生成器</h1>
+      <a class="text-sm text-blue-600 hover:underline" href="#howto">如何部署</a>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-4 py-6">
+    <!-- 控件区 -->
+    <section class="grid md:grid-cols-2 gap-4">
+      <div class="space-y-3">
+        <label class="block text-sm font-medium">在下面粘贴链接（每行一个）</label>
+        <textarea id="urls" class="w-full h-48 p-3 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="https://example.com/1\nhttps://example.com/2\n...（共10条或更多均可）"></textarea>
+        <p class="text-xs text-gray-500">提示：会自动忽略空行；只要是有效 URL 就可以。</p>
+      </div>
+
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-3 items-end">
+        <label class="block">
+          <span class="text-sm font-medium">尺寸（像素）</span>
+          <select id="size" class="mt-1 w-full rounded-lg border p-2">
+            <option value="256">256</option>
+            <option value="384" selected>384</option>
+            <option value="512">512</option>
+            <option value="768">768</option>
+          </select>
+        </label>
+        <label class="block">
+          <span class="text-sm font-medium">纠错等级</span>
+          <select id="ecl" class="mt-1 w-full rounded-lg border p-2">
+            <option value="L">L（低）</option>
+            <option value="M" selected>M（中）</option>
+            <option value="Q">Q（较高）</option>
+            <option value="H">H（高）</option>
+          </select>
+        </label>
+        <label class="block">
+          <span class="text-sm font-medium">边距（模块）</span>
+          <select id="margin" class="mt-1 w-full rounded-lg border p-2">
+            <option value="1">1</option>
+            <option value="2" selected>2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+          </select>
+        </label>
+        <div class="col-span-2 md:col-span-3 flex gap-2 mt-2">
+          <button id="btnGen" class="flex-1 rounded-xl bg-blue-600 text-white py-2 px-3 hover:bg-blue-700 font-medium">生成二维码</button>
+          <button id="btnClear" class="rounded-xl bg-gray-200 text-gray-900 py-2 px-3 hover:bg-gray-300">清空</button>
+        </div>
+        <div class="col-span-2 md:col-span-3 flex gap-2">
+          <button id="btnDownloadAll" class="flex-1 rounded-xl bg-emerald-600 text-white py-2 px-3 hover:bg-emerald-700 font-medium" title="打包全部二维码为 ZIP">打包全部为 ZIP</button>
+          <button id="btnSample" class="rounded-xl bg-indigo-100 text-indigo-700 py-2 px-3 hover:bg-indigo-200" title="填入示例数据">示例</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="mt-6">
+      <div id="status" class="text-sm text-gray-600"></div>
+      <div id="grid" class="mt-4 grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"></div>
+    </section>
+
+    <section id="howto" class="mt-12 prose max-w-none">
+      <h2>如何部署（让别人手机也能用）</h2>
+      <ol>
+        <li><strong>GitHub Pages（免费）</strong>：新建仓库，文件名 <code>index.html</code>，把本页面内容粘贴进去并提交；在仓库设置里启用 Pages，选择 <code>main</code> 分支，保存后获取公开链接并分享。</li>
+        <li><strong>Netlify / Vercel</strong>：新建站点，上传 <code>index.html</code> 或连接仓库，一键部署，得到公开 URL。</li>
+        <li><strong>任何静态托管</strong>：本工具纯前端，无需服务器；把 <code>index.html</code> 放到你可公开访问的任意静态空间即可。</li>
+      </ol>
+      <p class="text-sm text-gray-500">所有二维码在浏览器本地生成，不会上传你的链接；适合在公司或校园内部署私有页面。</p>
+    </section>
+  </main>
+
+  <footer class="max-w-6xl mx-auto px-4 py-8 text-xs text-gray-500">
+    <p>© 批量二维码生成器 · 纯前端 · 支持手机访问与下载</p>
+  </footer>
+
+  <script>
+    const el = id => document.getElementById(id);
+    const urlsEl = el('urls');
+    const gridEl = el('grid');
+    const statusEl = el('status');
+
+    const pad = (n, len=2) => String(n).padStart(len, '0');
+    const slug = (s, max=40) => s.replace(/https?:\/\//,'').replace(/[^a-zA-Z0-9-_\.]+/g,'-').slice(0,max).replace(/-+/g,'-');
+
+    function parseLines(text){
+      return text.split(/\r?\n/)
+        .map(s => s.trim())
+        .filter(Boolean)
+        .filter(s => {
+          try { new URL(s); return true; } catch { return false; }
+        });
+    }
+
+    async function makeQRCanvas(value, { size=384, margin=2, ecl='M' }={}){
+      return new Promise((resolve, reject) => {
+        const c = document.createElement('canvas');
+        QRCode.toCanvas(c, value, { width:size, margin, errorCorrectionLevel: ecl }, (err) => {
+          if (err) return reject(err);
+          resolve(c);
+        });
+      });
+    }
+
+    function canvasToBlob(canvas){
+      return new Promise(res => canvas.toBlob(res, 'image/png'));
+    }
+
+    async function generate(){
+      const size = parseInt(el('size').value,10);
+      const margin = parseInt(el('margin').value,10);
+      const ecl = el('ecl').value;
+      const list = parseLines(urlsEl.value);
+      gridEl.innerHTML = '';
+      if(list.length === 0){
+        statusEl.textContent = '没有检测到有效链接（确保每行一个完整 URL，如 https://example.com）。';
+        return;
+      }
+      statusEl.textContent = `共 ${list.length} 条链接，开始生成...`;
+
+      let idx = 0;
+      for (const url of list){
+        idx++;
+        const card = document.createElement('div');
+        card.className = 'card rounded-2xl bg-white p-4 flex flex-col';
+        const tag = document.createElement('div');
+        tag.className = 'text-xs text-gray-500 mb-2';
+        tag.textContent = `#${pad(idx,2)}`;
+        card.appendChild(tag);
+
+        const holder = document.createElement('div');
+        holder.className = 'w-full aspect-square flex items-center justify-center';
+        card.appendChild(holder);
+
+        try {
+          const canvas = await makeQRCanvas(url, { size, margin, ecl });
+          canvas.className = 'rounded';
+          holder.appendChild(canvas);
+
+          const urlTxt = document.createElement('div');
+          urlTxt.className = 'mt-3 text-xs break-words text-gray-700';
+          urlTxt.textContent = url;
+          card.appendChild(urlTxt);
+
+          const btns = document.createElement('div');
+          btns.className = 'mt-3 flex gap-2';
+          const btnDl = document.createElement('button');
+          btnDl.className = 'flex-1 rounded-xl bg-gray-900 text-white py-2 px-3 hover:bg-black';
+          btnDl.textContent = '下载 PNG';
+          btnDl.onclick = async () => {
+            const blob = await canvasToBlob(canvas);
+            const name = `${pad(idx,2)}_${slug(url)}.png`;
+            if (window.saveAs) saveAs(blob, name); else {
+              const a = document.createElement('a');
+              a.href = URL.createObjectURL(blob); a.download = name; a.click();
+              setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+            }
+          };
+          const btnCopy = document.createElement('button');
+          btnCopy.className = 'rounded-xl bg-gray-200 text-gray-900 py-2 px-3 hover:bg-gray-300';
+          btnCopy.textContent = '复制链接';
+          btnCopy.onclick = async () => { await navigator.clipboard.writeText(url); btnCopy.textContent='已复制'; setTimeout(()=>btnCopy.textContent='复制链接',1200); };
+
+          btns.appendChild(btnDl);
+          btns.appendChild(btnCopy);
+          card.appendChild(btns);
+        } catch (e){
+          const err = document.createElement('div');
+          err.className = 'text-red-600 text-sm mt-2';
+          err.textContent = '生成失败：' + (e?.message || e);
+          card.appendChild(err);
+        }
+        gridEl.appendChild(card);
+      }
+      statusEl.textContent = `已生成 ${list.length} 个二维码。`;
+    }
+
+    async function downloadAll(){
+      const cards = Array.from(gridEl.querySelectorAll('canvas'));
+      if(cards.length === 0){ statusEl.textContent = '还没有可打包的二维码。'; return; }
+      const zip = new JSZip();
+      let i=0;
+      for (const c of cards){
+        i++;
+        const idx = pad(i,2);
+        const url = c.parentElement?.nextSibling?.textContent || `link_${idx}`;
+        const name = `${idx}_${slug(url)}.png`;
+        const blob = await canvasToBlob(c);
+        zip.file(name, blob);
+      }
+      const content = await zip.generateAsync({ type: 'blob' });
+      saveAs(content, `qrs_${Date.now()}.zip`);
+    }
+
+    function fillSample(){
+      const demo = Array.from({length:10}, (_,i)=>`https://example.com/item-${i+1}`);
+      urlsEl.value = demo.join('\n');
+    }
+
+    el('btnGen').addEventListener('click', generate);
+    el('btnClear').addEventListener('click', ()=>{ urlsEl.value=''; gridEl.innerHTML=''; statusEl.textContent=''; });
+    el('btnDownloadAll').addEventListener('click', downloadAll);
+    el('btnSample').addEventListener('click', fillSample);
+  </script>
+</body>
+</html>
