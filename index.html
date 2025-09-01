@@ -61,6 +61,10 @@
             <option value="4">4</option>
           </select>
         </label>
+        <label class="block col-span-2 md:col-span-3">
+          <span class="text-sm font-medium">底图（可选）</span>
+          <input type="file" id="bgImage" accept="image/*" class="mt-1 w-full rounded-lg border p-2 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200">
+        </label>
         <div class="col-span-2 md:col-span-3 flex gap-2 mt-2">
           <button id="btnGen" class="flex-1 rounded-xl bg-blue-600 text-white py-2 px-3 hover:bg-blue-700 font-medium">生成二维码</button>
           <button id="btnClear" class="rounded-xl bg-gray-200 text-gray-900 py-2 px-3 hover:bg-gray-300">清空</button>
@@ -76,10 +80,19 @@
       <div id="status" class="text-sm text-gray-600"></div>
       <div id="grid" class="mt-4 grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"></div>
     </section>
+
+    <section id="howto" class="mt-12 prose max-w-none">
+      <h2>默认底图池：包含了10张不同的图片，每次生成都会随机选择，让每个二维码都有不同的背景。</h2>
+      <ol>
+        <li><strong>不上传图片</strong>：直接点击"示例"然后"生成二维码"，每个二维码会有随机的默认底图</li>
+        <li><strong>上传图片</strong>：选择自己的图片后生成，所有二维码都会使用你的图片作为底图</li>
+      </ol>
+      <p class="text-sm text-gray-500">所有二维码在浏览器本地生成，不会上传你的链接</p>
+    </section>
   </main>
 
   <footer class="max-w-6xl mx-auto px-4 py-8 text-xs text-gray-500">
-    <p>© 批量二维码生成器 · 纯前端 · 支持手机访问与下载</p>
+    <p>© 批量二维码生成器</p>
   </footer>
 
   <script>
@@ -92,27 +105,155 @@
     const slug = (s, max=40) => s.replace(/https?:\/\//,'').replace(/[^a-zA-Z0-9-_\.]+/g,'-').slice(0,max).replace(/-+/g,'-');
 
     function parseLines(text){
-      return text.split(/\r?\n/)
-        .map(s => s.trim())
-        .filter(Boolean)
-        .filter(s => {
-          try { new URL(s); return true; } catch { return false; }
-        });
+      const lines = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+      const result = [];
+      let currentGroup = '';
+      
+      lines.forEach(line => {
+        // Check if line is a URL (contains ①②③ etc. or starts with http)
+        if (/^[①②③④⑤⑥⑦⑧⑨⑩]/.test(line) || line.startsWith('http://') || line.startsWith('https://')) {
+          // Extract URL from lines that might have circle numbers
+          const urlMatch = line.match(/(https?:\/\/[^\s]+)/);
+          if (urlMatch) {
+            result.push({
+              url: urlMatch[1],
+              group: currentGroup,
+              originalLine: line
+            });
+          } else {
+            // Try to parse as URL directly
+            try { 
+              new URL(line); 
+              result.push({
+                url: line,
+                group: currentGroup,
+                originalLine: line
+              });
+            } catch { 
+              // Not a valid URL, might be a group identifier
+              if (line.match(/^[a-zA-Z0-9-]+$/)) {
+                currentGroup = line;
+              }
+            }
+          }
+        } else if (line.match(/^[a-zA-Z0-9-]+$/)) {
+          // This looks like a group identifier
+          currentGroup = line;
+        }
+      });
+      
+      return result;
     }
 
-    async function makeQRCanvas(value, { size=384, margin=2, ecl='M' }={}){
+    function loadImageFromFile(file) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        img.onload = () => {
+          URL.revokeObjectURL(url);
+          resolve(img);
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(url);
+          reject(new Error('图片加载失败'));
+        };
+        img.src = url;
+      });
+    }
+
+    function loadImageFromUrl(url) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error('默认底图加载失败'));
+        img.src = url;
+      });
+    }
+
+    function getRandomDefaultImage() {
+      const defaultImages = [
+        'https://tse3.mm.bing.net/th/id/OIP.vEbZwX21fk8goQnGSFTjMgHaEk?r=0&rs=1&pid=ImgDetMain&o=7&rm=3',
+        // 'https://tse1.mm.bing.net/th/id/OIP.QYmv4cncQhEQT8QZ8YzKFgHaE8?rs=1&pid=ImgDetMain&rm=2&w=306&h=204',
+      ];
+      return defaultImages[Math.floor(Math.random() * defaultImages.length)];
+    }
+
+    async function makeQRCanvas(value, { size=384, margin=2, ecl='M', backgroundImage=null, index=1, label=null }={}){
       // Check if QRious library is available
       if (typeof QRious === 'undefined') {
         throw new Error('QRious library not loaded');
       }
       
-      const canvas = document.createElement('canvas');
+      // If no background image, return QR canvas directly
+      if (!backgroundImage) {
+        const qrCanvas = document.createElement('canvas');
+        const qr = new QRious({
+          element: qrCanvas,
+          value: value,
+          size: size,
+          level: ecl
+        });
+        return qrCanvas;
+      }
+
+      // Calculate enlarged background size (3x larger to make QR 1/9th)
+      const scaleFactor = 3;
+      const enlargedWidth = backgroundImage.width * scaleFactor;
+      const enlargedHeight = backgroundImage.height * scaleFactor;
+      
+      // QR code size is 1/9th of the enlarged background (1/3 width * 1/3 height = 1/9)
+      const qrSize = Math.min(enlargedWidth, enlargedHeight) / 5;
+      
+      // Create QR code canvas with calculated size
+      const qrCanvas = document.createElement('canvas');
       const qr = new QRious({
-        element: canvas,
+        element: qrCanvas,
         value: value,
-        size: size,
+        size: qrSize,
         level: ecl
       });
+
+      // Create composite canvas
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      // Set canvas size to enlarged background size
+      canvas.width = enlargedWidth;
+      canvas.height = enlargedHeight;
+      
+      // Draw enlarged background image
+      ctx.drawImage(backgroundImage, 0, 0, enlargedWidth, enlargedHeight);
+      
+      // Calculate padding for white border and text
+      const borderWidth = 10;
+      const textHeight = 20;
+      const totalQRHeight = qrSize + borderWidth * 2 + textHeight;
+      const totalQRWidth = qrSize + borderWidth * 2;
+      
+      // Calculate random position ensuring QR code with border and text is fully visible
+      const maxX = enlargedWidth - totalQRWidth;
+      const maxY = enlargedHeight - totalQRHeight;
+      
+      const randomX = Math.floor(Math.random() * (maxX + 1));
+      const randomY = Math.floor(Math.random() * (maxY + 1));
+      
+      // Draw white background for QR code with border and text area
+      ctx.fillStyle = 'white';
+      ctx.fillRect(randomX, randomY, totalQRWidth, totalQRHeight);
+      
+      // Draw QR code with border offset
+      ctx.drawImage(qrCanvas, randomX + borderWidth, randomY + borderWidth);
+      
+      // Draw text below QR code
+      ctx.fillStyle = 'black';
+      ctx.font = '14px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText(
+        label || `#${String(index).padStart(2, '0')}`, 
+        randomX + totalQRWidth / 2, 
+        randomY + qrSize + borderWidth * 2 + 14
+      );
       
       return canvas;
     }
@@ -125,36 +266,55 @@
       const size = parseInt(el('size').value,10);
       const margin = parseInt(el('margin').value,10);
       const ecl = el('ecl').value;
+      const bgImageFile = el('bgImage').files[0];
       const list = parseLines(urlsEl.value);
       gridEl.innerHTML = '';
+      
       if(list.length === 0){
         statusEl.textContent = '没有检测到有效链接（确保每行一个完整 URL，如 https://example.com）。';
         return;
       }
+      
+      // Load background image if selected, otherwise use random default
+      let backgroundImage = null;
+      try {
+        statusEl.textContent = '正在加载底图...';
+        if (bgImageFile) {
+          backgroundImage = await loadImageFromFile(bgImageFile);
+        } else {
+          const randomImageUrl = getRandomDefaultImage();
+          backgroundImage = await loadImageFromUrl(randomImageUrl);
+        }
+      } catch (e) {
+        statusEl.textContent = '底图加载失败：' + e.message;
+        return;
+      }
+      
       statusEl.textContent = `共 ${list.length} 条链接，开始生成...`;
 
       let idx = 0;
-      for (const url of list){
+      for (const item of list){
         idx++;
         const card = document.createElement('div');
         card.className = 'card rounded-2xl bg-white p-4 flex flex-col';
         const tag = document.createElement('div');
         tag.className = 'text-xs text-gray-500 mb-2';
-        tag.textContent = `#${pad(idx,2)}`;
+        tag.textContent = item.group || `#${pad(idx,2)}`;
         card.appendChild(tag);
 
         const holder = document.createElement('div');
-        holder.className = 'w-full aspect-square flex items-center justify-center';
+        holder.className = 'w-full flex items-center justify-center';
+        holder.style.aspectRatio = backgroundImage ? `${backgroundImage.width}/${backgroundImage.height}` : '1';
         card.appendChild(holder);
 
         try {
-          const canvas = await makeQRCanvas(url, { size, margin, ecl });
-          canvas.className = 'rounded';
+          const canvas = await makeQRCanvas(item.url, { size, margin, ecl, backgroundImage, index: idx, label: item.group });
+          canvas.className = 'rounded max-w-full max-h-full';
           holder.appendChild(canvas);
 
           const urlTxt = document.createElement('div');
           urlTxt.className = 'mt-3 text-xs break-words text-gray-700';
-          urlTxt.textContent = url;
+          urlTxt.textContent = item.url;
           card.appendChild(urlTxt);
 
           const btns = document.createElement('div');
@@ -164,7 +324,7 @@
           btnDl.textContent = '下载 PNG';
           btnDl.onclick = async () => {
             const blob = await canvasToBlob(canvas);
-            const name = `${pad(idx,2)}_${slug(url)}.png`;
+            const name = `${pad(idx,2)}_${slug(item.url)}.png`;
             if (window.saveAs) saveAs(blob, name); else {
               const a = document.createElement('a');
               a.href = URL.createObjectURL(blob); a.download = name; a.click();
@@ -174,7 +334,7 @@
           const btnCopy = document.createElement('button');
           btnCopy.className = 'rounded-xl bg-gray-200 text-gray-900 py-2 px-3 hover:bg-gray-300';
           btnCopy.textContent = '复制链接';
-          btnCopy.onclick = async () => { await navigator.clipboard.writeText(url); btnCopy.textContent='已复制'; setTimeout(()=>btnCopy.textContent='复制链接',1200); };
+          btnCopy.onclick = async () => { await navigator.clipboard.writeText(item.url); btnCopy.textContent='已复制'; setTimeout(()=>btnCopy.textContent='复制链接',1200); };
 
           btns.appendChild(btnDl);
           btns.appendChild(btnCopy);
@@ -213,7 +373,7 @@
     }
 
     el('btnGen').addEventListener('click', generate);
-    el('btnClear').addEventListener('click', ()=>{ urlsEl.value=''; gridEl.innerHTML=''; statusEl.textContent=''; });
+    el('btnClear').addEventListener('click', ()=>{ urlsEl.value=''; el('bgImage').value=''; gridEl.innerHTML=''; statusEl.textContent=''; });
     el('btnDownloadAll').addEventListener('click', downloadAll);
     el('btnSample').addEventListener('click', fillSample);
   </script>
