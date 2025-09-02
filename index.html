@@ -65,8 +65,11 @@
           <span class="text-sm font-medium">底图（可选）</span>
           <input type="file" id="bgImage" accept="image/*" class="mt-1 w-full rounded-lg border p-2 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200">
         </label>
+        <div class="col-span-2 md:col-span-3 flex gap-2">
+          <button id="btnGenNoBg" class="flex-1 rounded-xl bg-purple-600 text-white py-2 px-3 hover:bg-purple-700 font-medium" title="生成无底图版本">生成无底图版本</button>
+        </div>
         <div class="col-span-2 md:col-span-3 flex gap-2 mt-2">
-          <button id="btnGen" class="flex-1 rounded-xl bg-blue-600 text-white py-2 px-3 hover:bg-blue-700 font-medium">生成二维码</button>
+          <button id="btnGen" class="flex-1 rounded-xl bg-blue-600 text-white py-2 px-3 hover:bg-blue-700 font-medium">生成有底图版本</button>
           <button id="btnClear" class="rounded-xl bg-gray-200 text-gray-900 py-2 px-3 hover:bg-gray-300">清空</button>
         </div>
         <div class="col-span-2 md:col-span-3 flex gap-2">
@@ -188,14 +191,14 @@
       return defaultImages[Math.floor(Math.random() * defaultImages.length)];
     }
 
-    async function makeQRCanvas(value, { size=384, margin=2, ecl='M', backgroundImage=null, index=1, label=null }={}){
+    async function makeQRCanvas(value, { size=384, margin=2, ecl='M', backgroundImage=null, index=1, label=null, noBg=false }={}){
       // Check if QRious library is available
       if (typeof QRious === 'undefined') {
         throw new Error('QRious library not loaded');
       }
       
-      // If no background image, return QR canvas directly
-      if (!backgroundImage) {
+      // If no background image or noBg flag is true, create QR with logo in center
+      if (!backgroundImage || noBg) {
         const qrCanvas = document.createElement('canvas');
         const qr = new QRious({
           element: qrCanvas,
@@ -203,6 +206,61 @@
           size: size,
           level: ecl
         });
+        
+        // If noBg is true, add logo in center and text below
+        if (noBg) {
+          const borderWidth = 10;
+          const textHeight = 20;
+          const totalHeight = size + borderWidth * 2 + textHeight;
+          const totalWidth = size + borderWidth * 2;
+          
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          canvas.width = totalWidth;
+          canvas.height = totalHeight;
+          
+          // Fill with white background
+          ctx.fillStyle = 'white';
+          ctx.fillRect(0, 0, totalWidth, totalHeight);
+          
+          // Draw the QR code with border offset
+          ctx.drawImage(qrCanvas, borderWidth, borderWidth);
+          
+          // Draw logo in the center
+          try {
+            const logoImg = await loadImageFromUrl('https://raw.githubusercontent.com/MirageY/QR-code/main/logo1.png');
+            
+            // Logo size is 1/4th of QR code size
+            const logoSize = size / 4;
+            const logoX = borderWidth + (size - logoSize) / 2;
+            const logoY = borderWidth + (size - logoSize) / 2;
+            
+            // Draw white background circle for logo
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.arc(logoX + logoSize/2, logoY + logoSize/2, logoSize/2 + 4, 0, 2 * Math.PI);
+            ctx.fill();
+            
+            // Draw logo
+            ctx.drawImage(logoImg, logoX, logoY, logoSize, logoSize);
+          } catch (e) {
+            // If logo fails to load, continue without it
+            console.warn('Logo failed to load:', e);
+          }
+          
+          // Draw text below QR code
+          ctx.fillStyle = 'black';
+          ctx.font = '24px Arial';
+          ctx.textAlign = 'center';
+          ctx.fillText(
+            label || `#${String(index).padStart(2, '0')}`, 
+            totalWidth / 2, 
+            size + borderWidth * 2 + 14
+          );
+          
+          return canvas;
+        }
+        
         return qrCanvas;
       }
 
@@ -212,7 +270,7 @@
       const enlargedHeight = backgroundImage.height * scaleFactor;
       
       // QR code size is 1/9th of the enlarged background (1/3 width * 1/3 height = 1/9)
-      const qrSize = Math.min(enlargedWidth, enlargedHeight) / 5;
+      const qrSize = Math.min(enlargedWidth, enlargedHeight) / 4;
       
       // Create QR code canvas with calculated size
       const qrCanvas = document.createElement('canvas');
@@ -259,7 +317,7 @@
         const logoImg = await loadImageFromUrl('https://raw.githubusercontent.com/MirageY/QR-code/main/logo1.png');
         
         // Logo size is 1/25th of QR code (1/5 width * 1/5 height = 1/25)
-        const logoSize = qrSize / 5;
+        const logoSize = qrSize / 4;
         const logoX = randomX + borderWidth + (qrSize - logoSize) / 2;
         const logoY = randomY + borderWidth + (qrSize - logoSize) / 2;
         
@@ -294,6 +352,14 @@
     }
 
     async function generate(){
+      await generateQRCodes(false);
+    }
+
+    async function generateNoBg(){
+      await generateQRCodes(true);
+    }
+
+    async function generateQRCodes(noBg = false){
       const size = parseInt(el('size').value,10);
       const margin = parseInt(el('margin').value,10);
       const ecl = el('ecl').value;
@@ -306,9 +372,9 @@
         return;
       }
       
-      // Load background image if selected
+      // Load background image if selected (only for non-noBg mode)
       let uploadedBackgroundImage = null;
-      if (bgImageFile) {
+      if (bgImageFile && !noBg) {
         try {
           statusEl.textContent = '正在加载底图...';
           uploadedBackgroundImage = await loadImageFromFile(bgImageFile);
@@ -318,7 +384,7 @@
         }
       }
       
-      statusEl.textContent = `共 ${list.length} 条链接，开始生成...`;
+      statusEl.textContent = `共 ${list.length} 条链接，开始生成${noBg ? '无底图版本' : ''}...`;
 
       let idx = 0;
       for (const item of list){
@@ -333,23 +399,26 @@
         const holder = document.createElement('div');
         holder.className = 'w-full flex items-center justify-center';
         
-        // Load background image for this QR code
-        let backgroundImage = uploadedBackgroundImage;
-        if (!backgroundImage) {
-          try {
-            const randomImageUrl = getRandomDefaultImage();
-            backgroundImage = await loadImageFromUrl(randomImageUrl);
-          } catch (e) {
-            // If random image fails, continue without background
-            backgroundImage = null;
+        // Load background image for this QR code (only if not noBg mode)
+        let backgroundImage = null;
+        if (!noBg) {
+          backgroundImage = uploadedBackgroundImage;
+          if (!backgroundImage) {
+            try {
+              const randomImageUrl = getRandomDefaultImage();
+              backgroundImage = await loadImageFromUrl(randomImageUrl);
+            } catch (e) {
+              // If random image fails, continue without background
+              backgroundImage = null;
+            }
           }
         }
         
-        holder.style.aspectRatio = backgroundImage ? `${backgroundImage.width}/${backgroundImage.height}` : '1';
+        holder.style.aspectRatio = (backgroundImage && !noBg) ? `${backgroundImage.width}/${backgroundImage.height}` : '1';
         card.appendChild(holder);
 
         try {
-          const canvas = await makeQRCanvas(item.url, { size, margin, ecl, backgroundImage, index: idx, label: item.group });
+          const canvas = await makeQRCanvas(item.url, { size, margin, ecl, backgroundImage, index: idx, label: item.group, noBg });
           canvas.className = 'rounded max-w-full max-h-full';
           holder.appendChild(canvas);
 
@@ -365,7 +434,7 @@
           btnDl.textContent = '下载 PNG';
           btnDl.onclick = async () => {
             const blob = await canvasToBlob(canvas);
-            const name = `${pad(idx,2)}_${slug(item.url)}.png`;
+            const name = `${pad(idx,2)}_${slug(item.url)}${noBg ? '_nobg' : ''}.png`;
             if (window.saveAs) saveAs(blob, name); else {
               const a = document.createElement('a');
               a.href = URL.createObjectURL(blob); a.download = name; a.click();
@@ -388,7 +457,7 @@
         }
         gridEl.appendChild(card);
       }
-      statusEl.textContent = `已生成 ${list.length} 个二维码。`;
+      statusEl.textContent = `已生成 ${list.length} 个${noBg ? '无底图版本' : ''}二维码。`;
     }
 
     async function downloadAll(){
@@ -414,6 +483,7 @@
     }
 
     el('btnGen').addEventListener('click', generate);
+    el('btnGenNoBg').addEventListener('click', generateNoBg);
     el('btnClear').addEventListener('click', ()=>{ urlsEl.value=''; el('bgImage').value=''; gridEl.innerHTML=''; statusEl.textContent=''; });
     el('btnDownloadAll').addEventListener('click', downloadAll);
     el('btnSample').addEventListener('click', fillSample);
