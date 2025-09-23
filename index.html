@@ -72,8 +72,7 @@
           <button id="btnGen" class="flex-1 rounded-xl bg-blue-600 text-white py-2 px-3 hover:bg-blue-700 font-medium" title="生成有底图版本">生成有底图版本</button>
         </div>
         <div class="col-span-2 md:col-span-3 flex gap-2">
-          <button id="btnDownloadAll" class="flex-1 rounded-xl bg-emerald-600 text-white py-2 px-3 hover:bg-emerald-400 font-medium hidden md:block" title="打包全部二维码为 ZIP">打包全部为 ZIP</button>
-          <button id="btnDownloadAllMobile" class="flex-1 rounded-xl bg-emerald-600 text-white py-2 px-3 hover:bg-emerald-400 font-medium md:hidden" title="逐个下载全部二维码到相册">全部下载到相册</button>
+          <button id="btnDownloadAll" class="flex-1 rounded-xl bg-emerald-600 text-white py-2 px-3 hover:bg-emerald-400 font-medium" title="打包全部二维码为 ZIP">打包全部为 ZIP</button>
           <button id="btnClear" class="rounded-xl bg-gray-200 text-gray-900 py-2 px-3 hover:bg-gray-300">清空</button>
           <button id="btnSample" class="rounded-xl bg-indigo-100 text-indigo-700 py-2 px-3 hover:bg-indigo-200" title="填入示例数据">示例</button>
         </div>
@@ -495,29 +494,6 @@
       saveAs(content, `qrs_${Date.now()}.zip`);
     }
 
-    async function downloadAllMobile(){
-      const downloadButtons = Array.from(gridEl.querySelectorAll('button')).filter(btn => btn.textContent === '下载 PNG');
-      if(downloadButtons.length === 0){
-        statusEl.textContent = '还没有可下载的二维码。';
-        return;
-      }
-
-      statusEl.textContent = `开始下载 ${downloadButtons.length} 个二维码到相册...`;
-
-      for (let i = 0; i < downloadButtons.length; i++) {
-        try {
-          downloadButtons[i].click();
-          statusEl.textContent = `正在下载第 ${i + 1}/${downloadButtons.length} 个二维码...`;
-          // 添加短暂延迟，避免同时下载太多文件
-          await new Promise(resolve => setTimeout(resolve, 500));
-        } catch (e) {
-          console.warn(`下载第 ${i + 1} 个二维码失败:`, e);
-        }
-      }
-
-      statusEl.textContent = `已完成下载 ${downloadButtons.length} 个二维码到相册！`;
-    }
-
     function fillSample(){
       // const demo = Array.from({length:10}, (_,i)=>`https://example.com/item-${i+1}`);
       // urlsEl.value = demo.join('\n');
@@ -544,7 +520,6 @@
     el('btnGenNoBg').addEventListener('click', generateNoBg);
     el('btnClear').addEventListener('click', ()=>{ urlsEl.value=''; el('bgImage').value=''; gridEl.innerHTML=''; statusEl.textContent=''; });
     el('btnDownloadAll').addEventListener('click', downloadAll);
-    el('btnDownloadAllMobile').addEventListener('click', downloadAllMobile);
     el('btnSample').addEventListener('click', fillSample);
   </script>
 </body>
