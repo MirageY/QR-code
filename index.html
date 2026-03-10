@@ -61,6 +61,13 @@
             <option value="4">4</option>
           </select>
         </label>
+        <label class="block">
+            <span class="text-sm font-medium">Logo</span>
+            <select id="logo" class="mt-1 w-full rounded-lg border p-2">
+              <option value="logo1" selected>深度净化</option>
+              <option value="logo2">守护星</option>
+            </select>
+          </label>
         <label class="block col-span-2 md:col-span-3">
           <span class="text-sm font-medium">底图（可选）</span>
           <input type="file" id="bgImage" accept="image/*" class="mt-1 w-full rounded-lg border p-2 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200">
@@ -221,7 +228,9 @@
           
           // Draw logo in the center
           try {
-            const logoImg = await loadImageFromUrl('https://raw.githubusercontent.com/MirageY/QR-code/main/logo1.png');
+            const logoChoice = el('logo').value;
+            const logoUrl = `https://raw.githubusercontent.com/MirageY/QR-code/main/${logoChoice}.png`;
+            const logoImg = await loadImageFromUrl(logoUrl);
             
             // Logo size is 1/4th of QR code size
             const logoSize = size / 4;
@@ -331,7 +340,9 @@
       
       // Draw logo in the center of QR code
       try {
-        const logoImg = await loadImageFromUrl('https://raw.githubusercontent.com/MirageY/QR-code/main/logo1.png');
+        const logoChoice = el('logo').value;
+        const logoUrl = `https://raw.githubusercontent.com/MirageY/QR-code/main/${logoChoice}.png`;
+        const logoImg = await loadImageFromUrl(logoUrl);
         
         // Logo size is 1/25th of QR code (1/5 width * 1/5 height = 1/25)
         const logoSize = qrSize / 4;
@@ -380,6 +391,7 @@
       const size = parseInt(el('size').value,10);
       const margin = parseInt(el('margin').value,10);
       const ecl = el('ecl').value;
+
       const bgImageFile = el('bgImage').files[0];
       const list = parseLines(urlsEl.value);
       gridEl.innerHTML = '';
